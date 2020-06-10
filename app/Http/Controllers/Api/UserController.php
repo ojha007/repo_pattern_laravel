@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -16,15 +17,16 @@ class UserController extends Controller
 
     public function __construct(User $user)
     {
-//        $this->middleware('auth:api');
         $this->model = $user;
     }
 
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'email' => 'required|email|exists:users,email',
             'password' => 'required|min:6',
+        ], [
+            'email.exists' => 'The email does not exists'
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 401);
@@ -34,24 +36,23 @@ class UserController extends Controller
             return response()->json(
                 [
                     'user' => $user,
-                    'role' => $user->role,
                     'token' => $user->createToken('api_client')->accessToken
                 ], Response::HTTP_OK);
         } else {
-            return response()->json(['errors' => [['Email/Password doesnt match our record ']]], Response::HTTP_UNAUTHORIZED);
+            throw ValidationException::withMessages(['no_record' => 'Email/Password doesnt match our record']);
         }
     }
 
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required',
-            'email' => 'required|email',
+            'name' => 'required|unique:users,name',
+            'email' => 'required|email|unique:users,email',
             'password' => 'required|min:5',
             'confirm_password' => 'required|same:password',
         ]);
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 401);
+            return response()->json(['errors' => $validator->errors()], Response::HTTP_UNAUTHORIZED);
         }
         $input = $request->all();
         $input['password'] = bcrypt($input['password']);
